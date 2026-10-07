@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Photo Editing Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" href="photologo.jpg">
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root {
+    --brand: #ff2f00; --brand-dark: #d92800; --brand-soft: #fff0ec;
+    --ink: #1d1b26; --muted: #6b6f80; --line: #e5e7ee; --panel: #fff; --bg: #eceef3;
+    --nav-h: 56px; --radius: 14px;
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-r: env(safe-area-inset-right, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-l: env(safe-area-inset-left, 0px);
+  }
+  html, body { height: 100%; margin: 0; overflow: hidden; -webkit-text-size-adjust: 100%; }
+  body {
+    height: 100vh; height: 100dvh;
+    padding: 0 var(--safe-r) var(--safe-b) var(--safe-l);
+    display: grid; grid-template-rows: calc(var(--nav-h) + var(--safe-t)) minmax(0, 1fr);
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+    color: var(--ink); background: var(--bg);
+  }
+  button { font-family: inherit; }
+  :focus-visible { outline: 3px solid rgba(255,47,0,.45); outline-offset: 2px; }
+
+  /* ---------- TOP BAR ---------- */
+  nav {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: var(--safe-t) max(clamp(12px, 2vw, 24px), var(--safe-r)) 0 max(clamp(12px, 2vw, 24px), var(--safe-l));
+    margin: 0 calc(var(--safe-l) * -1) 0 calc(var(--safe-r) * -1);
+    margin: 0 calc(-1 * var(--safe-r)) 0 calc(-1 * var(--safe-l));
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.05rem; letter-spacing: -.01em; white-space: nowrap; min-width: 0; }
+  .logo-mark { width: 32px; height: 32px; border-radius: 9px; background: var(--brand); display: grid; place-items: center; flex-shrink: 0; }
+  .actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink);
+    font-weight: 700; font-size: .9rem; padding: 9px 16px; border-radius: 10px; cursor: pointer; text-decoration: none;
+    min-height: 40px; transition: background .15s, border-color .15s, transform .15s;
+  }
+  .btn:hover { border-color: var(--brand); background: var(--brand-soft); }
+  .btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; box-shadow: 0 6px 16px rgba(255,47,0,.25); }
+  .btn-primary:hover { background: var(--brand-dark); border-color: var(--brand-dark); }
+  .btn-icon { padding: 9px 11px; }
+  #uploadImage { display: none; }
+
+  /* ---------- APP ---------- */
+  .app {
+    min-height: 0; min-width: 0; padding: 12px; gap: 12px;
+    display: grid; grid-template-columns: minmax(0, 1fr) clamp(240px, 30vw, 460px);
+  }
+
+  .stage {
+    container-type: size; min-height: 0; min-width: 0; padding: clamp(8px, 2vh, 24px);
+    display: grid; place-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    background-image: radial-gradient(#d9dce6 1px, transparent 1px); background-size: 18px 18px;
+  }
+  .stage.over { outline: 3px dashed var(--brand); outline-offset: -8px; }
+  .card-container {
+    position: relative;
+    width: min(100%, 60vh);                       /* fallback for browsers without container units */
+    width: min(100cqw, calc(100cqh * 4 / 3));     /* fits the stage in both directions */
+    aspect-ratio: 4 / 3;
+    border-radius: 8px; overflow: hidden; touch-action: none;
+    background: #f7f8fb center / cover no-repeat;
+    box-shadow: 0 0 0 1px var(--line), 0 14px 40px rgba(20,20,40,.18);
+  }
+  .empty-hint {
+    position: absolute; inset: 0; display: grid; place-content: center; gap: 6px; text-align: center;
+    padding: 12px; color: var(--muted); font-size: clamp(.7rem, 1.4vw, .95rem); pointer-events: none;
+  }
+  .empty-hint strong { color: var(--ink); font-size: 1.1em; }
+  .empty-hint .btn { pointer-events: auto; justify-self: center; margin-top: 8px; padding: 10px 20px; font-size: 1rem; }
+  .empty-hint.hidden { display: none; }
+
+  .image-wrapper {
+    position: absolute; display: none; cursor: grab; user-select: none; -webkit-user-select: none;
+    -webkit-touch-callout: none; touch-action: none;
+    outline: 2px solid transparent; transition: outline-color .15s;
+  }
+  .image-wrapper:hover, .image-wrapper.active { outline-color: var(--brand); }
+  .image-wrapper img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; -webkit-user-drag: none; }
+  .resizer {
+    position: absolute; right: -4px; bottom: -4px; width: 22px; height: 22px;
+    background: #fff; border: 3px solid var(--brand); border-radius: 50%;
+    cursor: nwse-resize; box-shadow: 0 2px 6px rgba(0,0,0,.25); touch-action: none;
+  }
+  .resizer::after { content: ''; position: absolute; inset: -14px; }   /* bigger touch target */
+
+  /* ---------- DOCK ---------- */
+  .dock { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .tabs { display: none; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 12px 14px; min-height: 0; min-width: 0; display: flex; flex-direction: column;
+  }
+  #fxPanel { flex: 1; }
+  .panel-title { margin: 0 0 10px; font-size: .9rem; font-weight: 800; display: flex; align-items: center; justify-content: space-between; }
+  .panel-title small { font-weight: 600; color: var(--muted); font-size: .75rem; }
+
+  .backgrounds {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 8px;
+    min-height: 0; overflow-y: auto; align-content: start; padding: 2px;
+  }
+  .background-template {
+    aspect-ratio: 1; border-radius: 8px; overflow: hidden; cursor: pointer;
+    border: 2px solid transparent; box-shadow: 0 0 0 1px var(--line); transition: transform .15s, border-color .15s;
+  }
+  .background-template:hover { transform: translateY(-2px); }
+  .background-template.selected { border-color: var(--brand); }
+  .background-preview { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .filter-options {
+    flex: 1; min-height: 0; overflow-y: auto; align-content: start;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px;
+    padding: 2px;
+  }
+  .filter-options:empty::before { content: 'Upload a photo to preview filters.'; grid-column: 1 / -1; color: var(--muted); font-size: .8rem; }
+  .filter-item { cursor: pointer; text-align: center; min-width: 0; }
+  .filter-preview {
+    display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px;
+    border: 2px solid transparent; box-shadow: 0 0 0 1px var(--line); transition: transform .15s;
+  }
+  .filter-item:hover .filter-preview { transform: scale(1.06); }
+  .filter-item.selected .filter-preview { border-color: var(--brand); }
+  .filter-name {
+    display: block; margin-top: 3px; font-size: .64rem; font-weight: 600; color: var(--muted);
+    text-transform: capitalize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .filter-item.selected .filter-name { color: var(--brand); }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: #cfd3df; border-radius: 6px; }
+
+  /* ================= RESPONSIVE ================= */
+
+  /* 1) Narrow OR short screens: Backgrounds / Filters become tabs (one panel at a time) */
+  @media (max-width: 900px), (max-height: 520px) {
+    .tabs { display: flex; gap: 6px; }
+    .tabs button {
+      flex: 1; border: 1px solid var(--line); background: #fff; border-radius: 10px;
+      padding: 9px; font-weight: 700; font-size: .85rem; cursor: pointer; color: var(--muted);
+    }
+    .dock[data-tab="bg"] .tabs [data-tab="bg"],
+    .dock[data-tab="fx"] .tabs [data-tab="fx"] {
+      background: var(--brand-soft); border-color: var(--brand); color: var(--brand);
+    }
+    .dock[data-tab="bg"] #fxPanel, .dock[data-tab="fx"] #bgPanel { display: none; }
+    .panel { flex: 1; padding: 10px; }
+    .panel-title { display: none; }
+    .dock { gap: 8px; }
+  }
+
+  /* 2) Landscape phones / short windows: tighter chrome, side-by-side stays */
+  @media (max-height: 520px) {
+    :root { --nav-h: 46px; }
+    .btn { padding: 6px 12px; min-height: 36px; }
+    .app { padding: 8px; gap: 8px; }
+    .stage { padding: 8px; }
+    .dock { }
+    .app { grid-template-columns: minmax(0, 1fr) clamp(200px, 34vw, 320px); }
+  }
+
+  /* 3) Phones / tablets in portrait: preview on top, thin strip below */
+  @media (max-width: 900px) and (orientation: portrait), (max-width: 560px) {
+    .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; padding: 8px; gap: 8px; }
+    .stage { padding: 8px; }
+    .panel { flex: none; }
+    .backgrounds, .filter-options {
+      display: flex; overflow-x: auto; overflow-y: hidden; gap: 10px; padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .filter-options { flex: none; }
+    .backgrounds .background-template { width: 64px; flex-shrink: 0; }
+    .filter-item { width: 64px; flex-shrink: 0; }
+  }
+
+  /* 4) Very small phones: icon-only buttons */
+  @media (max-width: 560px) {
+    .btn span.lbl, .logo span.t { display: none; }
+    .btn { padding: 9px 12px; }
+  }
+</style>
+</head>
+<body>
+  <nav>
+    <div class="logo">
+      <div class="logo-mark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.8"/><path d="M21 15l-5-5L5 21"/></svg>
+      </div>
+      <span class="t">Photo Editing Tools</span>
+    </div>
+    <div class="actions">
+      <a class="btn btn-icon" href="Home.html" aria-label="Home" title="Home">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5V21H3z"/></svg>
+      </a>
+      <input type="file" id="uploadImage" accept="image/*">
+      <label for="uploadImage" class="btn" aria-label="Upload photo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+        <span class="lbl" id="uploadLbl">Upload photo</span>
+      </label>
+      <button class="btn btn-primary" onclick="downloadImage()" aria-label="Download">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        <span class="lbl">Download</span>
+      </button>
+    </div>
+  </nav>
+
+  <main class="app">
+    <section class="stage" id="stage">
+      <div class="card-container" id="cardContainer">
+        <div class="empty-hint" id="emptyHint">
+          <strong>Your card preview</strong>
+          <span>Upload or drop a photo here, then pick a background.</span>
+          <label for="uploadImage" class="btn btn-primary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+            Upload photo
+          </label>
+        </div>
+        <div id="imageWrapper" class="image-wrapper">
+          <img id="cardImage" src="" alt="Uploaded Image">
+          <div class="resizer" id="resizer"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="dock" id="dock" data-tab="bg">
+      <div class="tabs">
+        <button data-tab="bg">Backgrounds</button>
+        <button data-tab="fx">Filters</button>
+      </div>
+      <div class="panel" id="bgPanel">
+        <h2 class="panel-title">Backgrounds</h2>
+        <div class="backgrounds" id="backgroundTemplates"></div>
+      </div>
+      <div class="panel" id="fxPanel">
+        <h2 class="panel-title">Filters <small id="fxName">None</small></h2>
+        <div class="filter-options" id="filterOptions"></div>
+      </div>
+    </aside>
+  </main>
+
+<script>
+  const uploadImage = document.getElementById('uploadImage');
+  const cardImage = document.getElementById('cardImage');
+  const imageWrapper = document.getElementById('imageWrapper');
+  const cardContainer = document.getElementById('cardContainer');
+  const filterOptions = document.getElementById('filterOptions');
+  const resizer = document.getElementById('resizer');
+  const backgroundTemplates = document.getElementById('backgroundTemplates');
+  const emptyHint = document.getElementById('emptyHint');
+  const stage = document.getElementById('stage');
+  const dock = document.getElementById('dock');
+  const fxName = document.getElementById('fxName');
+
+  // tabs (only visible on small / short screens)
+  dock.querySelectorAll('.tabs button').forEach(b =>
+    b.addEventListener('click', () => dock.dataset.tab = b.dataset.tab));
+
+  const backgrounds = ['bday1.png','bday2.png','bday3.png','janmast.png','holi.png','holi2.png','marryctms1.png'];
+  const filters = {
+    None: '', Grayscale: 'grayscale(1)', Sepia: 'sepia(1)', Blur: 'blur(3px) brightness(1)',
+    Brightness: 'brightness(1) blur(1px)', contrast: 'contrast(2)', bright: 'brightness(1.5)',
+    warm: 'sepia(0.3) contrast(1.2)', playa: 'sepia(0.5) contrast(1.2)', honey: 'sepia(0.8)',
+    isla: 'contrast(1.5)', desert: 'brightness(1.2) sepia(0.5)', clay: 'grayscale(0.7) contrast(1.3)',
+    palma: 'saturate(1.5)', blush: 'sepia(0.4) contrast(1.1)', alpaca: 'grayscale(0.9)',
+    modena: 'contrast(1.8)', west: 'sepia(0.3) brightness(1.1)', metro: 'saturate(1.7) contrast(1.2)',
+    reel: 'contrast(1.6)', bazaar: 'grayscale(0.6) sepia(0.3)', ollie: 'saturate(2.2)',
+    onyx: 'brightness(1.4) contrast(1.5)', eiffel: 'sepia(0.5) saturate(1.2)',
+    vogue: 'contrast(2)', vista: 'brightness(1.1) saturate(1.3)'
+  };
+
+  let currentBg = '';
+  let currentFilter = '';
+
+  // Position/size are stored as percent of the card, so everything scales with the window
+  const box = { x: 30, y: 30, w: 40, h: 40 };
+  function applyBox() {
+    imageWrapper.style.left = box.x + '%';
+    imageWrapper.style.top = box.y + '%';
+    imageWrapper.style.width = box.w + '%';
+    imageWrapper.style.height = box.h + '%';
+  }
+  applyBox();
+
+  /* ---------- Backgrounds ---------- */
+  backgrounds.forEach(bg => {
+    const el = document.createElement('div');
+    el.className = 'background-template';
+    el.innerHTML = `<img src="${bg}" class="background-preview" alt="" loading="lazy">`;
+    el.addEventListener('click', () => {
+      currentBg = bg;
+      cardContainer.style.backgroundImage = `url('${bg}')`;
+      document.querySelectorAll('.background-template').forEach(x => x.classList.remove('selected'));
+      el.classList.add('selected');
+    });
+    backgroundTemplates.appendChild(el);
+  });
+
+  /* ---------- Upload (button or drag & drop onto the stage) ---------- */
+  function loadFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      cardImage.onload = () => {
+        const r = cardContainer.getBoundingClientRect();
+        const ratio = cardImage.naturalHeight / cardImage.naturalWidth;
+        let w = 40;
+        let h = (w / 100 * r.width * ratio) / r.height * 100;
+        if (h > 90) { h = 90; w = (h / 100 * r.height / ratio) / r.width * 100; }
+        Object.assign(box, { w, h, x: (100 - w) / 2, y: (100 - h) / 2 });
+        applyBox();
+        imageWrapper.style.display = 'block';
+        emptyHint.classList.add('hidden');
+        document.getElementById('uploadLbl').textContent = 'Change photo';
+      };
+      cardImage.src = ev.target.result;
+      currentFilter = ''; cardImage.style.filter = ''; fxName.textContent = 'None';
+      createFilterPreviews(ev.target.result);
+    };
+    reader.readAsDataURL(file);
+  }
+  uploadImage.addEventListener('change', e => { loadFile(e.target.files[0]); e.target.value = ''; });
+  ['dragenter', 'dragover'].forEach(t => stage.addEventListener(t, e => { e.preventDefault(); stage.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => stage.addEventListener(t, e => { e.preventDefault(); stage.classList.remove('over'); }));
+  stage.addEventListener('drop', e => loadFile(e.dataTransfer.files[0]));
+
+  /* ---------- Filters ---------- */
+  // Small thumbnail so 25 previews don't each hold a full-size phone photo in memory
+  function makeThumb(src, size = 120) {
+    return new Promise(resolve => {
+      const im = new Image();
+      im.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = c.height = size;
+        const s = Math.max(size / im.naturalWidth, size / im.naturalHeight);
+        const w = im.naturalWidth * s, h = im.naturalHeight * s;
+        c.getContext('2d').drawImage(im, (size - w) / 2, (size - h) / 2, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.8));
+      };
+      im.onerror = () => resolve(src);
+      im.src = src;
+    });
+  }
+
+  async function createFilterPreviews(src) {
+    const thumb = await makeThumb(src);
+    filterOptions.innerHTML = '';
+    Object.entries(filters).forEach(([name, value]) => {
+      const item = document.createElement('div');
+      item.className = 'filter-item' + (value === '' ? ' selected' : '');
+      const img = document.createElement('img');
+      img.src = thumb; img.className = 'filter-preview'; img.style.filter = value; img.alt = name;
+      const label = document.createElement('span');
+      label.className = 'filter-name'; label.textContent = name;
+      item.title = name;
+      item.append(img, label);
+      item.addEventListener('click', () => {
+        currentFilter = value;
+        cardImage.style.filter = value;
+        fxName.textContent = name;
+        filterOptions.querySelectorAll('.filter-item').forEach(x => x.classList.remove('selected'));
+        item.classList.add('selected');
+      });
+      filterOptions.appendChild(item);
+    });
+  }
+
+  /* ---------- Drag & resize (mouse + touch + pen) ---------- */
+  let mode = null, start = {};
+  imageWrapper.addEventListener('pointerdown', (e) => {
+    if (e.target === resizer) return;
+    mode = 'drag';
+    start = { px: e.clientX, py: e.clientY, x: box.x, y: box.y };
+    imageWrapper.setPointerCapture(e.pointerId);
+    imageWrapper.style.cursor = 'grabbing';
+    imageWrapper.classList.add('active');
+  });
+  resizer.addEventListener('pointerdown', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    mode = 'resize';
+    start = { px: e.clientX, py: e.clientY, w: box.w, h: box.h };
+    resizer.setPointerCapture(e.pointerId);
+    imageWrapper.classList.add('active');
+  });
+  function onMove(e) {
+    if (!mode) return;
+    const rect = cardContainer.getBoundingClientRect();
+    const dx = (e.clientX - start.px) / rect.width * 100;
+    const dy = (e.clientY - start.py) / rect.height * 100;
+    if (mode === 'drag') {
+      box.x = Math.min(Math.max(start.x + dx, 0), 100 - box.w);
+      box.y = Math.min(Math.max(start.y + dy, 0), 100 - box.h);
+    } else {
+      const minW = 50 / rect.width * 100, minH = 50 / rect.height * 100;
+      box.w = Math.min(Math.max(start.w + dx, minW), 100 - box.x);
+      box.h = Math.min(Math.max(start.h + dy, minH), 100 - box.y);
+    }
+    applyBox();
+  }
+  function onUp() { mode = null; imageWrapper.style.cursor = 'grab'; imageWrapper.classList.remove('active'); }
+  [imageWrapper, resizer].forEach(el => {
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
+  });
+
+  /* ---------- Download (1600x1200, matches the preview) ---------- */
+  function saveCanvas(canvas) {
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = 'edited_image.png';
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }, 'image/png');
+  }
+
+  function downloadImage() {
+    const W = 1600, H = 1200;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#f7f8fb';
+    ctx.fillRect(0, 0, W, H);
+
+    const finish = () => {
+      if (cardImage.src && imageWrapper.style.display === 'block') {
+        const bx = box.x / 100 * W, by = box.y / 100 * H;
+        const bw = box.w / 100 * W, bh = box.h / 100 * H;
+        const iw = cardImage.naturalWidth, ih = cardImage.naturalHeight;
+        const r = Math.min(bw / iw, bh / ih);
+        const dw = iw * r, dh = ih * r;
+        const scale = W / cardContainer.getBoundingClientRect().width;
+        ctx.filter = (currentFilter || 'none').replace(/(\d*\.?\d+)px/g, (_, n) => (n * scale) + 'px');
+        ctx.save();
+        ctx.beginPath(); ctx.rect(bx, by, bw, bh); ctx.clip();
+        ctx.drawImage(cardImage, bx + (bw - dw) / 2, by + (bh - dh) / 2, dw, dh);
+        ctx.restore();
+        ctx.filter = 'none';
+      }
+      saveCanvas(canvas);
+    };
+
+    if (!currentBg) return finish();
+    const bg = new Image();
+    bg.onload = () => {
+      const r = Math.max(W / bg.naturalWidth, H / bg.naturalHeight);
+      const dw = bg.naturalWidth * r, dh = bg.naturalHeight * r;
+      ctx.drawImage(bg, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      finish();
+    };
+    bg.onerror = finish;
+    bg.src = currentBg;
+  }
+</script>
+</body>
+</html>
